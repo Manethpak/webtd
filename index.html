@@ -8,29 +8,16 @@
   </head>
 
   <body>
-    <header>
-      <a class="brand" href="./"><span class="brand-mark">✳</span> WILDWARD</a
-      ><span class="edition">A LITTLE FOREST. A LAST STAND.</span
-      ><button id="help" class="quiet">How to play <span>?</span></button>
-    </header>
     <main>
-      <section class="intro">
-        <div>
-          <div class="eyebrow">THE GREENWOOD CAMPAIGN <span> / 01</span></div>
-          <h1>Hold the forest.</h1>
-          <p>Build your defenses. Find your rhythm. Let nothing through.</p>
-        </div>
-        <div class="difficulty">
-          <i></i> THE WINDING GROVE <small id="campaign-summary">30 waves · 3 tower types</small>
-        </div>
-      </section>
       <div class="game-layout">
         <section class="battlefield" aria-label="Game battlefield">
           <div class="field-bar">
             <span><i class="live-dot"></i> <b id="phase">PREPARE YOUR DEFENSE</b></span>
             <div>
               <button id="pause" title="Pause or resume">Ⅱ Pause</button
-              ><button id="speed" title="Change game speed">1×</button>
+              ><button id="speed" title="Change game speed">1×</button
+              ><button id="help" title="How to play">? <span>Help</span></button
+              ><button id="reset" title="Start a new game">↻ <span>New game</span></button>
             </div>
           </div>
           <div class="canvas-wrap">
@@ -73,19 +60,15 @@
             <h3>A little teamwork goes far.</h3>
             <p>Frost slows the crowd. Ember breaks it up. Arrow takes care of the stragglers.</p>
           </section>
-          <button id="start" class="start">Send wave 01 <span>5s</span></button>
-          <p id="wave-note" class="wave-note">Next wave in 5s · Click to send early.</p>
+          <button id="start" class="start">Start game <span>→</span></button>
+          <p id="wave-note" class="wave-note">Select a difficulty to begin.</p>
           <div class="difficulty-control">
-            <label for="difficulty-choice">NEXT GAME DIFFICULTY</label>
+            <label for="difficulty-choice">GAME DIFFICULTY</label>
             <select id="difficulty-choice" aria-describedby="difficulty-note"></select>
             <p id="difficulty-note"></p>
           </div>
         </aside>
       </div>
-      <footer>
-        <span>ROOTED IN STRATEGY.</span><span>Build · Upgrade · Endure</span
-        ><button id="reset" class="quiet">New game ↻</button>
-      </footer>
     </main>
     <dialog id="instructions">
       <button id="close-help" class="quiet close">Close ×</button>
@@ -97,10 +80,7 @@
       </p>
       <ol>
         <li>Select a tower card, then place its base marker on unshaded ground. The small circle is the tower footprint; shaded areas block its center. Invalid clicks keep build mode active. Press Escape to select existing towers.</li>
-        <li>
-          Waves start after a <span id="help-delay">5</span>-second preparation break. Click Send
-          wave to start early. Defeating enemies earns gold.
-        </li>
+        <li>Choose a difficulty, build your opening defense, then click Start game. Later waves begin after a <span id="help-delay">5</span>-second preparation break; click Send wave to start them early.</li>
         <li>Click a built tower to upgrade it or sell it for <span id="help-refund">70</span>% of its investment.</li>
         <li>
           Mix slowing Frost towers with Ember’s area damage. Heavy enemies arrive from wave 3 and

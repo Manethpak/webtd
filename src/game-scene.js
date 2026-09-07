@@ -9,6 +9,25 @@ const TOWER_SHEETS = {
   frost: new URL("../assets/towers/frost-prepared/sheet.png", import.meta.url).href,
   ember: new URL("../assets/towers/ember-prepared/sheet.png", import.meta.url).href,
 };
+const ENEMY_FRAME = { width: 96, height: 96, originX: 48 / 96, originY: 88 / 96 };
+const ENEMY_SHEETS = {
+  small: {
+    url: new URL("../assets/enemies/small-prepared/sheet.png", import.meta.url).href,
+    displaySize: 36,
+  },
+  normal: {
+    url: new URL("../assets/enemies/normal-prepared/sheet.png", import.meta.url).href,
+    displaySize: 48,
+  },
+  heavy: {
+    url: new URL("../assets/enemies/heavy-prepared/sheet.png", import.meta.url).href,
+    displaySize: 64,
+  },
+  boss: {
+    url: new URL("../assets/enemies/boss-prepared/sheet.png", import.meta.url).href,
+    displaySize: 80,
+  },
+};
 const color = (hex) => Number.parseInt(hex.replace("#", ""), 16);
 
 function seededScenery() {
@@ -97,6 +116,12 @@ export class BattlefieldScene extends Phaser.Scene {
         frameHeight: TOWER_FRAME.height,
       });
     }
+    for (const [type, sheet] of Object.entries(ENEMY_SHEETS)) {
+      this.load.spritesheet(`${type}-enemy`, sheet.url, {
+        frameWidth: ENEMY_FRAME.width,
+        frameHeight: ENEMY_FRAME.height,
+      });
+    }
   }
 
   create() {
@@ -113,6 +138,7 @@ export class BattlefieldScene extends Phaser.Scene {
       .setVisible(false);
     this.effectGraphics = this.add.graphics().setDepth(1000);
     this.ambientGraphics = this.add.graphics().setDepth(1100);
+    this.createEnemyAnimations();
     this.createMapLabels();
     this.drawMap();
 
@@ -129,6 +155,20 @@ export class BattlefieldScene extends Phaser.Scene {
     });
     this.input.keyboard?.addCapture([Phaser.Input.Keyboard.KeyCodes.SPACE]);
     this.onSelectionChange();
+  }
+
+  createEnemyAnimations() {
+    for (const type of Object.keys(ENEMY_SHEETS)) {
+      const texture = `${type}-enemy`;
+      const animation = `${type}-enemy-run`;
+      if (!this.textures.exists(texture) || this.anims.exists(animation)) continue;
+      this.anims.create({
+        key: animation,
+        frames: this.anims.generateFrameNumbers(texture, { start: 0, end: 7 }),
+        frameRate: 10,
+        repeat: -1,
+      });
+    }
   }
 
   createMapLabels() {
@@ -311,21 +351,106 @@ export class BattlefieldScene extends Phaser.Scene {
     const activeIds = new Set(this.model.enemies.map((enemy) => enemy.id));
     for (const [id, view] of this.enemyViews) {
       if (!activeIds.has(id)) {
-        view.destroy();
+        view.container.destroy();
         this.enemyViews.delete(id);
       }
     }
     for (const enemy of this.model.enemies) {
       let view = this.enemyViews.get(enemy.id);
       if (!view) {
-        view = this.add.graphics();
+        view = this.createEnemyView(enemy);
         this.enemyViews.set(enemy.id, view);
       }
       this.drawEnemy(view, enemy);
     }
   }
 
-  drawEnemy(graphics, enemy) {
+  createEnemyView(enemy) {
+    const type = enemy.boss
+      ? "boss"
+      : enemy.heavy
+        ? "heavy"
+        : enemy.fast
+          ? "small"
+          : "normal";
+    const displaySize = ENEMY_SHEETS[type].displaySize;
+    const shadow = this.add.graphics();
+    const texture = `${type}-enemy`;
+    let sprite = null;
+    let fallback = null;
+
+    if (this.textures.exists(texture)) {
+      sprite = this.add
+        .sprite(0, 0, texture)
+        .setOrigin(ENEMY_FRAME.originX, ENEMY_FRAME.originY)
+        .setDisplaySize(displaySize, displaySize)
+        .play(`${type}-enemy-run`);
+    } else {
+      fallback = this.add.graphics();
+    }
+
+    const health = this.add.graphics();
+    const container = this.add.container(enemy.x, enemy.y, [shadow, sprite ?? fallback, health]);
+    return {
+      container,
+      sprite,
+      fallback,
+      shadow,
+      health,
+      displaySize,
+      healthWidth: enemy.boss
+        ? displaySize - 20
+        : enemy.heavy
+          ? displaySize - 16
+          : Math.max(26, displaySize - 10),
+      lastX: enemy.x,
+    };
+  }
+
+  drawEnemy(view, enemy) {
+    const { container, sprite, fallback, shadow, health, displaySize, healthWidth } = view;
+    container.setPosition(enemy.x, enemy.y).setDepth(600 + enemy.y);
+
+    const horizontalMovement = enemy.x - view.lastX;
+    if (sprite && Math.abs(horizontalMovement) > 0.01) sprite.setFlipX(horizontalMovement < 0);
+    view.lastX = enemy.x;
+
+    shadow.clear();
+    shadow.fillStyle(0x0c211b, enemy.boss ? 0.45 : 0.32);
+    shadow.fillEllipse(3, -1, displaySize * 0.72, displaySize * 0.2);
+
+    if (sprite) {
+      if (enemy.slow) sprite.setTint(0x8fd9df);
+      else sprite.clearTint();
+      const slowMultiplier = enemy.slow ? 1 - 0.52 * (1 - (enemy.slowResist ?? 0)) : 1;
+      sprite.anims.timeScale = this.paused || this.isOverlayOpen()
+        ? 0
+        : this.speed * Math.max(0.65, Math.min(1.75, enemy.speed / 45)) * slowMultiplier;
+    } else {
+      this.drawFallbackEnemy(fallback, enemy);
+    }
+
+    const healthY = -displaySize * ENEMY_FRAME.originY - 6;
+    const healthTint = enemy.slow
+      ? 0x9cdfdf
+      : enemy.boss
+        ? 0xef9a7d
+        : enemy.heavy
+          ? 0xd6bd8d
+          : 0xc6dc93;
+    health.clear();
+    health.fillStyle(0x13251c);
+    health.fillRect(-healthWidth / 2, healthY, healthWidth, 3);
+    health.fillStyle(healthTint);
+    health.fillRect(
+      -healthWidth / 2,
+      healthY,
+      healthWidth * Math.max(0, enemy.hp / enemy.maxHp),
+      3,
+    );
+  }
+
+  drawFallbackEnemy(graphics, enemy) {
     const radius = enemy.boss ? 19 : enemy.heavy ? 15 : enemy.fast ? 8 : 11;
     const tint = enemy.slow
       ? 0x78b7bc
@@ -336,23 +461,15 @@ export class BattlefieldScene extends Phaser.Scene {
           : enemy.fast
             ? 0xb9ad77
             : 0x8b7188;
-    graphics
-      .clear()
-      .setPosition(enemy.x, enemy.y)
-      .setDepth(600 + enemy.y);
-    fillCircle(graphics, 3, 6, radius, 0x0c211b, 0.34);
-    fillCircle(graphics, 0, 0, radius, tint);
-    fillCircle(graphics, -3, -2, 2, 0xf6e3bd);
-    fillCircle(graphics, 4, -2, 2, 0xf6e3bd);
+    graphics.clear();
+    fillCircle(graphics, 0, -radius, radius, tint);
+    fillCircle(graphics, -3, -radius - 2, 2, 0xf6e3bd);
+    fillCircle(graphics, 4, -radius - 2, 2, 0xf6e3bd);
     if (enemy.boss) {
       graphics.fillStyle(0xdcb47b);
-      graphics.fillRect(-10, -20, 20, 5);
-      for (let x = -10; x <= 10; x += 8) graphics.fillRect(x, -25, 4, 7);
+      graphics.fillRect(-10, -radius - 20, 20, 5);
+      for (let x = -10; x <= 10; x += 8) graphics.fillRect(x, -radius - 25, 4, 7);
     }
-    graphics.fillStyle(0x13251c);
-    graphics.fillRect(-radius, -radius - 9, radius * 2, 3);
-    graphics.fillStyle(enemy.slow ? 0x9cdfdf : 0xc6dc93);
-    graphics.fillRect(-radius, -radius - 9, radius * 2 * Math.max(0, enemy.hp / enemy.maxHp), 3);
   }
 
   drawRanges() {
@@ -530,7 +647,7 @@ export class BattlefieldScene extends Phaser.Scene {
     this.speed = 1;
     this.lastUiState = "";
     for (const view of this.towerViews.values()) view.destroy();
-    for (const view of this.enemyViews.values()) view.destroy();
+    for (const view of this.enemyViews.values()) view.container.destroy();
     this.towerViews.clear();
     this.enemyViews.clear();
     if (this.mapGraphics) this.drawMap();

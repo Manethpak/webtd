@@ -223,6 +223,7 @@ export class Game {
     if (this.status !== "playing") return;
     this.effects = this.effects.filter((e) => (e.life -= dt) > 0);
     if (!this.active) {
+      if (this.wave === 0) return;
       this.waveCountdown = Math.max(0, this.waveCountdown - countdownDt);
       if (this.waveCountdown <= 1e-9) this.startWave();
       return;

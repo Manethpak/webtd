@@ -78,7 +78,7 @@ test("partial balance overrides drive the campaign, spawning, prices and refunds
   assert.equal(game.sellValue(tower), 35);
   game.sell(tower);
   assert.equal(game.gold, 465);
-  game.update(10);
+  assert.equal(game.startWave(), true);
   assert.equal(game.remaining, 3);
   game.update(0.01);
   assert.equal(game.spawnTimer, 1);

@@ -75,12 +75,13 @@ test("path interpolates and clamps endpoints", () => {
   assert.deepEqual(pointAt(0), { x: -25, y: 160 });
   assert.deepEqual(pointAt(PATH_LENGTH + 100), { x: 925, y: 455 });
 });
-test("first wave starts automatically after five seconds", () => {
+test("first wave waits for an explicit start", () => {
   const g = new Game();
-  g.update(4.9);
+  g.update(50);
   assert.equal(g.wave, 0);
   assert.equal(g.active, false);
-  g.update(0.1);
+  assert.equal(g.waveCountdown, 5);
+  assert.equal(g.startWave(), true);
   assert.equal(g.wave, 1);
   assert.equal(g.active, true);
 });

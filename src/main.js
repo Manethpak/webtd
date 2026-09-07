@@ -17,9 +17,11 @@ const roles = {
 };
 
 let battlefield;
+let awaitingStart = true;
 
+$("difficulty-choice").add(new Option("Select difficulty…", "", true, true));
 for (const [value, preset] of Object.entries(DIFFICULTIES)) {
-  $("difficulty-choice").add(new Option(preset.label, value, value === "standard", value === "standard"));
+  $("difficulty-choice").add(new Option(preset.label, value));
 }
 
 for (const [index, [type, tower]] of Object.entries(TOWERS).entries()) {
@@ -58,46 +60,64 @@ function renderInfo() {
 function renderUi() {
   const game = battlefield.model;
   const selected = battlefield.selected;
+  const difficulty = $("difficulty-choice").value;
 
   $("gold").textContent = game.gold;
   $("lives").textContent = game.lives;
   $("wave").textContent = game.wave;
   $("wave-limit").textContent = `/${game.maxWaves}`;
-  $("campaign-summary").textContent = `${game.maxWaves} waves · 3 tower types`;
-  $("difficulty-note").textContent = `${DIFFICULTIES[game.difficulty].label} active. Choice applies on New game or Play again.`;
+  $("difficulty-choice").disabled = !awaitingStart;
+  $("difficulty-note").textContent = awaitingStart
+    ? difficulty
+      ? `${DIFFICULTIES[difficulty].label} selected. Build, then start when ready.`
+      : "Choose a difficulty before starting."
+    : `${DIFFICULTIES[game.difficulty].label} difficulty active.`;
   $("help-waves").textContent = game.maxWaves;
   $("help-delay").textContent = game.config.waveDelay;
   $("help-refund").textContent = Math.round(game.config.economy.sellRefund * 100);
   $("help-purchases").textContent = game.config.economy.purchasesPerIncrease;
   $("help-price").textContent = Math.round(game.config.economy.priceIncrease * 100);
   $("help-route").textContent = game.config.secondPathWave;
-  $("phase").textContent = battlefield.paused
-    ? "TIME STANDS STILL"
-    : game.status === "won"
-      ? "THE GROVE IS SAFE"
-      : game.status === "lost"
-        ? "THE GATE HAS FALLEN"
-        : game.active
-          ? game.secondPathOpen
-            ? "TWO ROUTES · DEFEND BOTH ENTRIES"
-            : "DEFEND THE GROVE"
-          : "PREPARE YOUR DEFENSE";
-  $("start").disabled = game.active || game.status !== "playing";
-  $("start").innerHTML = game.active
-    ? `Wave ${String(game.wave).padStart(2, "0")} in progress <span>···</span>`
-    : `Send wave ${String(Math.min(game.maxWaves, game.wave + 1)).padStart(2, "0")} <span>${Math.ceil(game.waveCountdown)}s</span>`;
+  $("phase").textContent = awaitingStart
+    ? difficulty
+      ? "BUILD DEFENSES · START WHEN READY"
+      : "CHOOSE YOUR DIFFICULTY"
+    : battlefield.paused
+      ? "TIME STANDS STILL"
+      : game.status === "won"
+        ? "THE GROVE IS SAFE"
+        : game.status === "lost"
+          ? "THE GATE HAS FALLEN"
+          : game.active
+            ? game.secondPathOpen
+              ? "TWO ROUTES · DEFEND BOTH ENTRIES"
+              : "DEFEND THE GROVE"
+            : "PREPARE YOUR DEFENSE";
+  $("start").disabled = awaitingStart ? !difficulty : game.active || game.status !== "playing";
+  $("start").innerHTML = awaitingStart
+    ? "Start game <span>→</span>"
+    : game.active
+      ? `Wave ${String(game.wave).padStart(2, "0")} in progress <span>···</span>`
+      : `Send wave ${String(Math.min(game.maxWaves, game.wave + 1)).padStart(2, "0")} <span>${Math.ceil(game.waveCountdown)}s</span>`;
+  $("pause").disabled = awaitingStart;
+  $("speed").disabled = awaitingStart;
   $("pause").textContent = battlefield.paused ? "▶ Resume" : "Ⅱ Pause";
   $("speed").textContent = battlefield.speed + "×";
-  $("wave-note").textContent = game.active
-    ? `${game.enemies.length + game.remaining} enemies remaining · ${game.kills} defeated`
-    : (game.wave + 1) % 4 === 0
-      ? `Boss wave starts in ${Math.ceil(game.waveCountdown)}s. Prepare your defenses.`
-      : `${battlefield.paused ? "Countdown paused" : "Next wave in " + Math.ceil(game.waveCountdown) + "s"} · Click to send early.`;
+  $("wave-note").textContent = awaitingStart
+    ? difficulty
+      ? "Place your opening towers, then click Start game."
+      : "Select a difficulty to begin."
+    : game.active
+      ? `${game.enemies.length + game.remaining} enemies remaining · ${game.kills} defeated`
+      : (game.wave + 1) % 4 === 0
+        ? `Boss wave starts in ${Math.ceil(game.waveCountdown)}s. Prepare your defenses.`
+        : `${battlefield.paused ? "Countdown paused" : "Next wave in " + Math.ceil(game.waveCountdown) + "s"} · Click to send early.`;
 
   document.querySelectorAll(".tower-card").forEach((button) => {
     button.querySelector(".price").textContent = `${game.towerCost(button.dataset.type)} ◈`;
     button.classList.toggle("active", button.dataset.type === battlefield.buildType);
     button.setAttribute("aria-pressed", button.dataset.type === battlefield.buildType);
+    button.disabled = awaitingStart && !difficulty;
   });
 
   if ($("upgrade")) {
@@ -139,24 +159,43 @@ new Phaser.Game({
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
 });
 
-$("start").onclick = () => battlefield.startWave();
+$("difficulty-choice").onchange = () => {
+  const difficulty = $("difficulty-choice").value;
+  if (!awaitingStart || !difficulty) return;
+  battlefield.resetGame({ ...battlefield.gameOptions, difficulty });
+  $("hint").textContent = "Place your opening towers, then click Start game.";
+  refresh();
+};
+$("start").onclick = () => {
+  if (awaitingStart) {
+    if (!$("difficulty-choice").value) return;
+    awaitingStart = false;
+    battlefield.startWave();
+    $("hint").textContent = "Wave one has begun. Hold the gate.";
+    refresh();
+    return;
+  }
+  battlefield.startWave();
+};
 $("pause").onclick = () => battlefield.togglePaused();
 $("speed").onclick = () => battlefield.cycleSpeed();
-$("restart").onclick = reset;
+$("restart").onclick = prepareNewGame;
 $("reset").onclick = () => {
   const game = battlefield.model;
   if (
     (game.wave === 0 && game.towers.length === 0) ||
     confirm("Start over and clear your defenses?")
   ) {
-    reset();
+    prepareNewGame();
   }
 };
 
-function reset() {
-  battlefield.resetGame({ ...battlefield.gameOptions, difficulty: $("difficulty-choice").value });
+function prepareNewGame() {
+  awaitingStart = true;
+  $("difficulty-choice").value = "";
+  battlefield.resetGame({ ...battlefield.gameOptions, difficulty: "standard" });
   $("end").classList.add("hidden");
-  $("hint").textContent = "Select a tower, then click open ground to build.";
+  $("hint").textContent = "Select a difficulty to begin.";
   refresh();
 }
 
@@ -166,10 +205,13 @@ $("close-help").onclick = () => $("instructions").close();
 document.addEventListener("keydown", (event) => {
   if ($("instructions").open || /INPUT|TEXTAREA|SELECT/.test(event.target.tagName)) return;
   if (event.code === "Escape") battlefield.deselect();
-  if (["Digit1", "Digit2", "Digit3"].includes(event.code)) {
+  if (
+    ["Digit1", "Digit2", "Digit3"].includes(event.code) &&
+    (!awaitingStart || $("difficulty-choice").value)
+  ) {
     battlefield.choose(Object.keys(TOWERS)[Number(event.code.at(-1)) - 1]);
   }
-  if (event.code === "Space" && event.target.tagName !== "BUTTON") {
+  if (event.code === "Space" && event.target.tagName !== "BUTTON" && !awaitingStart) {
     event.preventDefault();
     battlefield.togglePaused();
   }
